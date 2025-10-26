@@ -6,3 +6,6 @@ sky:
     database: waimai
     username: root
     password: Kxcsxsx123456!
+  alioss:
+    bucket-name: sky-take-out-plus6
+    endpoint: oss-cn-hangzhou.aliyuncs.com

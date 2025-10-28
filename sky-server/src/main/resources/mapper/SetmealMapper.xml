@@ -15,6 +15,25 @@
             #{setmeal.createUser},
             #{setmeal.updateUser}
     </insert>
+    <update id="update">
+        update setmeal
+        set
+            category_id = #{setmeal.categoryId},
+            price = #{setmeal.price},
+            name = #{setmeal.name},
+            image = #{setmeal.image},
+
+            <if test="description != null">
+                description = #{setmeal.description},
+            </if>
+            <if test="status != null">
+                status = #{setmeal.status},
+            </if>
+            update_time = #{setmeal.updateTime},
+            update_user = #{setmeal.updateUser}
+        where
+            id = #{setmeal.id}
+    </update>
     <select id="selectPage" resultType="com.sky.vo.SetmealVO">
         select
         s.*,c.name categoryName

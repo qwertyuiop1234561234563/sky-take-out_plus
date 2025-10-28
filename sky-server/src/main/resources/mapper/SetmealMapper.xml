@@ -15,7 +15,7 @@
             #{setmeal.createUser},
             #{setmeal.updateUser}
     </insert>
-    <select id="pageQuery" resultType="com.sky.vo.SetmealVO">
+    <select id="selectPage" resultType="com.sky.vo.SetmealVO">
         select
         s.*,c.name categoryName
         from
@@ -37,5 +37,6 @@
         </where>
         order by s.create_time desc
     </select>
+
 
 </mapper>

@@ -9,3 +9,7 @@ sky:
   alioss:
     bucket-name: sky-take-out-plus6
     endpoint: oss-cn-hangzhou.aliyuncs.com
+  redis:
+    host: 192.168.81.100
+    port: 6379
+    password: Kxcsxsx123456!

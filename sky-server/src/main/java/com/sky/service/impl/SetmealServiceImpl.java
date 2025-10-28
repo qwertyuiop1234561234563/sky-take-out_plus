@@ -84,7 +84,7 @@ public class SetmealServiceImpl implements SetmealService {
 
         return setmealVO;
     }
-
+    @Transactional
     @Override
     public void update(SetmealDTO setmealDTO) {
         //将SetmealDTO转换为Setmeal实体类

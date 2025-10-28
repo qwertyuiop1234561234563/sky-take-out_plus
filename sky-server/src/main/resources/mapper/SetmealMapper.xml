@@ -18,10 +18,18 @@
     <update id="update">
         update setmeal
         set
-            category_id = #{setmeal.categoryId},
-            price = #{setmeal.price},
-            name = #{setmeal.name},
-            image = #{setmeal.image},
+            <if test="name != null">
+                name = #{setmeal.name},
+            </if>
+            <if test="categoryId != null">
+                category_id = #{setmeal.categoryId},
+            </if>
+            <if test="price != null">
+                price = #{setmeal.price},
+            </if>
+            <if test="image != null">
+                image = #{setmeal.image},
+            </if>
 
             <if test="description != null">
                 description = #{setmeal.description},

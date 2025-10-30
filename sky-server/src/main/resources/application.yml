@@ -41,9 +41,17 @@ sky:
     admin-ttl: 1296000000
     # 设置前端传递过来的令牌名称
     admin-token-name: token
+    user-secret-key: itheima
+    # 设置jwt过期时间
+    user-ttl: 1296000000
+    # 设置前端传递过来的令牌名称
+    user-token-name: authentication
   alioss:
     endpoint: ${sky.alioss.emdpoint}
     bucket-name: ${sky.alioss.bucket-name}
+  wechat:
+    appid: ${sky.wechat.appid}
+    secret: ${sky.wechat.secret}
 pagehelper:
   helper-dialect: mysql
   support-methods-arguments: true

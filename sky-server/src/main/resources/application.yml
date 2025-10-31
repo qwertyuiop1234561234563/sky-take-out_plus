@@ -16,6 +16,12 @@ spring:
     host: ${sky.redis.host}
     port: ${sky.redis.port}
     password: ${sky.redis.password}
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss  # 统一日期格式（支持 LocalDateTime/Date）
+    time-zone: GMT+8                   # 时区偏移
+    default-property-inclusion: non_null  # 序列化时忽略空值字段
+    deserialization:
+      fail-on-unknown-properties: false # 反序列化时忽略未知字段（接口兼容）
 
 mybatis:
   #mapper配置文件

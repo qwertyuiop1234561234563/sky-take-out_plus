@@ -23,6 +23,23 @@ spring:
     deserialization:
       fail-on-unknown-properties: false # 反序列化时忽略未知字段（接口兼容）
 
+# knife4j配置
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: "default"
+      paths-to-match: "/**"
+      packages-to-scan: com.github.xiaoymin.boot3
+  default-flat-param-object: true
+
+knife4j:
+  enable: true
+
 mybatis:
   #mapper配置文件
   mapper-locations: classpath:mapper/*.xml

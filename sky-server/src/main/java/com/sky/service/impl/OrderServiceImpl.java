@@ -22,6 +22,7 @@ import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
 import com.sky.vo.OrderVO;
+import com.sky.websocket.WebSocketServer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -59,6 +60,8 @@ public class OrderServiceImpl implements OrderService {
     private final WeChatPayUtil weChatPayUtil;
 
     private final UserMapper userMapper;
+
+    private final WebSocketServer webSocketServer;
 
     /**
      * 用户下单
@@ -182,6 +185,14 @@ jsonObject.put("code","ORDERPAID");
                 .build();
 
         orderMapper.update(orders);
+
+        //通过websocket向客户端浏览器推送消息
+        Map map = new HashMap();
+        map.put("type",1);
+        map.put("orderId",ordersDB.getId());
+        map.put("content","订单号："+outTradeNo);
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
     }
     /**
      * 用户端订单分页查询

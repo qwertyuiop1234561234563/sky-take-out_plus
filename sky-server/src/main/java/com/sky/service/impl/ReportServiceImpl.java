@@ -3,8 +3,10 @@ package com.sky.service.impl;
 
 import com.sky.entity.Orders;
 import com.sky.mapper.OrderMapper;
+import com.sky.mapper.UserMapper;
 import com.sky.service.ReportService;
 import com.sky.vo.TurnoverReportVO;
+import com.sky.vo.UserReportVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
@@ -25,15 +27,18 @@ import java.util.Map;
 public class ReportServiceImpl implements ReportService {
 
     private final OrderMapper orderMapper;
+    private final UserMapper userMapper;
+
     /**
      * 营业额统计
+     *
      * @param begin
      * @param end
      * @return
      */
     @Override
     public TurnoverReportVO getTurnoverStatistics(LocalDate begin, LocalDate end) {
-    //存放begin到end的所有日期
+        //存放begin到end的所有日期
         List<LocalDate> dateList = new ArrayList<>();
         // 遍历begin到end的所有日期，将其添加到dateList中
         for (LocalDate date = begin; !date.isAfter(end); date = date.plusDays(1)) {
@@ -59,6 +64,49 @@ public class ReportServiceImpl implements ReportService {
         return TurnoverReportVO.builder()
                 .dateList(dateListStr)
                 .turnoverList(StringUtils.join(turnoverList, ","))
+                .build();
+    }
+
+    /**
+     * 用户统计
+     *
+     * @param begin
+     * @param end
+     * @return
+     */
+    @Override
+    public UserReportVO getUserStatistics(LocalDate begin, LocalDate end) {
+        // 存放begin到end的所有日期
+        List<LocalDate> dateList = new ArrayList<>();
+        // 遍历begin到end的所有日期，将其添加到dateList中
+        for (LocalDate date = begin; !date.isAfter(end); date = date.plusDays(1)) {
+            dateList.add(date);
+        }
+        // 遍历dateList，查询每个日期对应的用户统计信息
+        List<Integer> totalUserList = new ArrayList<>();
+        List<Integer> newUserList = new ArrayList<>();
+        for (LocalDate date : dateList) {
+            // 查询date日期对应的用户统计信息
+            LocalDateTime beginTime = LocalDateTime.of(date, LocalTime.MIN);
+            LocalDateTime endTime = LocalDateTime.of(date, LocalTime.MAX);
+            Map map = new HashMap();
+
+            map.put("end", endTime);
+            // 查询date日期对应的用户总量
+            Integer totalUser = userMapper.countByMap(map);
+            map.put("begin", beginTime);
+            Integer newUser = userMapper.countByMap(map);
+            totalUser = totalUser == null ? 0 : totalUser;
+            totalUserList.add(totalUser);
+            newUserList.add(newUser == null ? 0 : newUser);
+
+        }
+        // 拼接日期列表，格式为：yyyy-MM-dd,yyyy-MM-dd,yyyy-MM-dd
+        String dateListStr = StringUtils.join(dateList, ",");
+        return UserReportVO.builder()
+                .dateList(dateListStr)
+                .totalUserList(StringUtils.join(totalUserList, ","))
+                .newUserList(StringUtils.join(newUserList, ","))
                 .build();
     }
 }

@@ -4,8 +4,8 @@
 <mapper namespace="com.sky.mapper.SetmealMapper">
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         insert into setmeal (name, category_id, price, description, status, create_time, update_time, create_user, update_user)
-        values
-           #{setmeal.name},
+        values(
+            #{setmeal.name},
             #{setmeal.categoryId},
             #{setmeal.price},
             #{setmeal.description},
@@ -13,7 +13,7 @@
             #{setmeal.createTime},
             #{setmeal.updateTime},
             #{setmeal.createUser},
-            #{setmeal.updateUser}
+            #{setmeal.updateUser})
     </insert>
     <update id="update">
         update setmeal
@@ -76,6 +76,13 @@
             <if test="name != null">
                 and name like concat('%',#{name},'%')
             </if>
+        </where>
+    </select>
+    <select id="countByMap" resultType="java.lang.Integer">
+        select count(id) from setmeal
+        <where>
+            <if test="status != null"> and status = #{status} </if>
+            <if test="categoryId != null"> and category_id = #{categoryId} </if>
         </where>
     </select>
 

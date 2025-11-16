@@ -15,6 +15,7 @@ import com.sky.exception.OrderBusinessException;
 import com.sky.exception.ShoppingCartBusinessException;
 import com.sky.mapper.*;
 import com.sky.result.PageResult;
+import com.sky.service.AsyncService;
 import com.sky.service.OrderService;
 import com.sky.utils.HttpClientUtil;
 import com.sky.utils.WeChatPayUtil;
@@ -62,6 +63,8 @@ public class OrderServiceImpl implements OrderService {
     private final UserMapper userMapper;
 
     private final WebSocketServer webSocketServer;
+
+    private final AsyncService asyncService;
 
     /**
      * 用户下单
@@ -192,7 +195,7 @@ jsonObject.put("code","ORDERPAID");
         map.put("orderId",ordersDB.getId());
         map.put("content","订单号："+outTradeNo);
         String json = JSON.toJSONString(map);
-        webSocketServer.sendToAllClient(json);
+        asyncService.sendToAllClient(json);
     }
     /**
      * 用户端订单分页查询

@@ -1,6 +1,7 @@
 
 package com.sky.service.impl;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -11,10 +12,10 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class OrderLockService {
 
-    @Autowired
-    private RedissonClient redissonClient;
+    private final RedissonClient redissonClient;
 
     private static final String ORDER_LOCK_PREFIX = "lock:order:submit:";
     private static final String CART_LOCK_PREFIX = "lock:cart:operation:";

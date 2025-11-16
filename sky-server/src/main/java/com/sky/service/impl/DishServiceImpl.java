@@ -1,5 +1,6 @@
 package com.sky.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.github.xiaoymin.knife4j.core.util.CollectionUtils;
@@ -16,23 +17,36 @@ import com.sky.mapper.SetmealDishMapper;
 import com.sky.result.PageResult;
 import com.sky.service.DishService;
 import com.sky.vo.DishVO;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static com.sky.utils.RandomTtlUtil.getRandomTtl;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class DishServiceImpl implements DishService {
 
-        @Autowired
-        private DishFlavorMapper dishFlavorMapper;
-        @Autowired
-        private DishMapper dishMapper;
-        @Autowired
-        private SetmealDishMapper setmealDishMapper;
+        private final DishFlavorMapper dishFlavorMapper;
+        private final DishMapper dishMapper;
+        private final SetmealDishMapper setmealDishMapper;
+        private final StringRedisTemplate stringRedisTemplate;
+
+
+    private static final String DISH_KEY_PREFIX = "dish:";
+    private static final String NULL_VALUE = "NULL";
+    private static final long NULL_CACHE_TTL = 300;
+
+
         /**
          * 新增菜品
          * @param dishDTO
@@ -45,7 +59,8 @@ public class DishServiceImpl implements DishService {
             Dish dish = new Dish();
             BeanUtils.copyProperties(dishDTO, dish);
             dishMapper.insert(dish);
-
+            String cacheKey = DISH_KEY_PREFIX + dish.getId();
+            stringRedisTemplate.delete(cacheKey);
             //获取insert语句生成的主键值
             long dishId = dish.getId();
             //向口味表插入n条数据
@@ -112,8 +127,37 @@ public class DishServiceImpl implements DishService {
      */
     @Override
     public DishVO getByIdWithFlavor(Long id) {
+        String cacheKey = DISH_KEY_PREFIX + id;
+
+        String cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
+        if (cacheValue != null) {
+            if (NULL_VALUE.equals(cacheValue)) {
+                log.info("命中空值缓存，菜品ID: {}", id);
+                return null;
+            }
+            // 缓存命中，反序列化返回
+            Dish dish = JSON.parseObject(cacheValue, Dish.class);
+            //根据菜品id查询口味
+            List<DishFlavor> flavors = dishFlavorMapper.getByDishId(id);
+            //将查询到的菜品和口味封装到DishVO中
+            DishVO dishVO = new DishVO();
+            BeanUtils.copyProperties(dish, dishVO);
+            dishVO.setFlavors(flavors);
+            return dishVO;
+        }
         //根据id查询菜品
         Dish dish = dishMapper.getById(id);
+        String jsonString = JSON.toJSONString(dish);
+        if (dish == null) {
+            // 缓存空对象，短TTL
+            stringRedisTemplate.opsForValue().set(cacheKey, NULL_VALUE,
+                    NULL_CACHE_TTL, TimeUnit.SECONDS);
+            log.info("缓存空对象，菜品ID: {}", id);
+        } else {
+            // 缓存真实数据
+            stringRedisTemplate.opsForValue().set(cacheKey, jsonString,
+                    getRandomTtl(), TimeUnit.SECONDS);
+        }
         //根据菜品id查询口味
         List<DishFlavor> flavors = dishFlavorMapper.getByDishId(id);
         //将查询到的菜品和口味封装到DishVO中

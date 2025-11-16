@@ -1,5 +1,6 @@
 package com.sky.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.sky.constant.MessageConstant;
@@ -7,6 +8,7 @@ import com.sky.constant.StatusConstant;
 import com.sky.dto.SetmealDTO;
 import com.sky.dto.SetmealPageQueryDTO;
 import com.sky.entity.Dish;
+import com.sky.entity.DishFlavor;
 import com.sky.entity.Setmeal;
 import com.sky.entity.SetmealDish;
 import com.sky.exception.DeletionNotAllowedException;
@@ -17,22 +19,34 @@ import com.sky.mapper.SetmealMapper;
 import com.sky.result.PageResult;
 import com.sky.service.SetmealService;
 import com.sky.vo.DishItemVO;
+import com.sky.vo.DishVO;
 import com.sky.vo.SetmealVO;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+import static com.sky.utils.RandomTtlUtil.getRandomTtl;
+
+@RequiredArgsConstructor
+@Slf4j
 @Service
 public class SetmealServiceImpl implements SetmealService {
-    @Autowired
-    private SetmealMapper setmealMapper;
-    @Autowired
-    private SetmealDishMapper setmealDishMapper;
-    @Autowired
-    private DishMapper dishMapper;
+
+    private final SetmealMapper setmealMapper;
+    private final SetmealDishMapper setmealDishMapper;
+    private final DishMapper dishMapper;
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private static final String SETMEAL_KEY_PREFIX = "setmeal:";
+    private static final String NULL_VALUE = "NULL";
+    private static final long NULL_CACHE_TTL = 300;
 
     @Transactional
     @Override
@@ -42,6 +56,8 @@ public class SetmealServiceImpl implements SetmealService {
         BeanUtils.copyProperties(setmealDTO, setmeal);
         //向套餐表插入1条数据
         setmealMapper.insert(setmeal);
+        String cacheKey = SETMEAL_KEY_PREFIX + setmeal.getId();
+        stringRedisTemplate.delete(cacheKey);
         //获取套餐id
         Long setmealId = setmeal.getId();
         //将SetmealDishDTO转换为SetmealDish实体类
@@ -78,7 +94,33 @@ public class SetmealServiceImpl implements SetmealService {
 
     @Override
     public SetmealVO getById(Long id) {
+        String cacheKey = SETMEAL_KEY_PREFIX + id;
+
+        String cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
+        if (cacheValue != null) {
+            if (NULL_VALUE.equals(cacheValue)) {
+                log.info("命中空值缓存，套餐ID: {}", id);
+                return null;
+            }
+
+             Setmeal setmeal = JSON.parseObject(cacheValue, Setmeal.class);
+             //将Setmeal实体类转换为SetmealVO
+             SetmealVO setmealVO = new SetmealVO();
+             BeanUtils.copyProperties(setmeal, setmealVO);
+             return setmealVO;
+        }
         Setmeal setmeal = setmealMapper.getById(id);
+        String jsonString = JSON.toJSONString(setmeal);
+        if (setmeal == null) {
+            // 缓存空对象，短TTL
+            stringRedisTemplate.opsForValue().set(cacheKey, NULL_VALUE,
+                    NULL_CACHE_TTL, TimeUnit.SECONDS);
+            log.info("缓存空对象，套餐ID: {}", id);
+        } else {
+            // 缓存真实数据
+            stringRedisTemplate.opsForValue().set(cacheKey, jsonString,
+                    getRandomTtl(), TimeUnit.SECONDS);
+        }
         List<SetmealDish> setmealDishes = setmealDishMapper.getBySetmealId(id);
 
         SetmealVO setmealVO = new SetmealVO();

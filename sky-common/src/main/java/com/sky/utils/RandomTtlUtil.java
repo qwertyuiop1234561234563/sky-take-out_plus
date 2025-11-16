@@ -1,15 +1,20 @@
 package com.sky.utils;
 
-public class RandomTtlUtil {
-        // 随机TTL范围，单位：秒
-        private static final int MIN_TTL = 60;
-        private static final int MAX_TTL = 120;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
-        /**
-         * 生成随机TTL
-         * @return 随机TTL值（秒）
-         */
-        public static int getRandomTtl() {
-            return (int) (Math.random() * (MAX_TTL - MIN_TTL + 1) + MIN_TTL);
-        }
+import java.util.concurrent.ThreadLocalRandom;
+
+public class RandomTtlUtil {
+    private static final long BASE_TTL = 3600; // 基础1小时
+    private static final long RANDOM_RANGE = 600; // 随机范围10分钟
+
+    private static StringRedisTemplate stringRedisTemplate;
+    /**
+     * 生成随机TTL，避免同时过期
+     */
+     public static long getRandomTtl() {
+        return BASE_TTL + ThreadLocalRandom.current().nextLong(RANDOM_RANGE);
+    }
+
+
 }

@@ -19,6 +19,8 @@ import com.sky.service.DishService;
 import com.sky.vo.DishVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -31,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.sky.utils.RandomTtlUtil.getRandomTtl;
 
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -40,12 +43,13 @@ public class DishServiceImpl implements DishService {
         private final DishMapper dishMapper;
         private final SetmealDishMapper setmealDishMapper;
         private final StringRedisTemplate stringRedisTemplate;
+        private final RedissonClient redissonClient;
 
 
     private static final String DISH_KEY_PREFIX = "dish:";
     private static final String NULL_VALUE = "NULL";
     private static final long NULL_CACHE_TTL = 300;
-
+    private static final String LOCK_KEY_PREFIX = "lock:dish:";
 
         /**
          * 新增菜品
@@ -128,6 +132,8 @@ public class DishServiceImpl implements DishService {
     @Override
     public DishVO getByIdWithFlavor(Long id) {
         String cacheKey = DISH_KEY_PREFIX + id;
+        String lockKey = LOCK_KEY_PREFIX + id;
+
 
         String cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cacheValue != null) {
@@ -135,36 +141,56 @@ public class DishServiceImpl implements DishService {
                 log.info("命中空值缓存，菜品ID: {}", id);
                 return null;
             }
-            // 缓存命中，反序列化返回
             Dish dish = JSON.parseObject(cacheValue, Dish.class);
-            //根据菜品id查询口味
             List<DishFlavor> flavors = dishFlavorMapper.getByDishId(id);
-            //将查询到的菜品和口味封装到DishVO中
             DishVO dishVO = new DishVO();
             BeanUtils.copyProperties(dish, dishVO);
             dishVO.setFlavors(flavors);
             return dishVO;
         }
-        //根据id查询菜品
-        Dish dish = dishMapper.getById(id);
-        String jsonString = JSON.toJSONString(dish);
-        if (dish == null) {
-            // 缓存空对象，短TTL
-            stringRedisTemplate.opsForValue().set(cacheKey, NULL_VALUE,
-                    NULL_CACHE_TTL, TimeUnit.SECONDS);
-            log.info("缓存空对象，菜品ID: {}", id);
-        } else {
-            // 缓存真实数据
-            stringRedisTemplate.opsForValue().set(cacheKey, jsonString,
-                    getRandomTtl(), TimeUnit.SECONDS);
+        RLock lock = redissonClient.getLock(lockKey);
+        try {
+            boolean locked = lock.tryLock(100, 3000, TimeUnit.MILLISECONDS);
+            if (locked) {
+                cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
+                if (cacheValue != null) {
+                    Dish dish = JSON.parseObject(cacheValue, Dish.class);
+                    List<DishFlavor> flavors = dishFlavorMapper.getByDishId(id);
+                    //将查询到的菜品和口味封装到DishVO中
+                    DishVO dishVO = new DishVO();
+                    BeanUtils.copyProperties(dish, dishVO);
+                    dishVO.setFlavors(flavors);
+                    return dishVO;
+                }
+                Dish dish = dishMapper.getById(id);
+                String jsonString = JSON.toJSONString(dish);
+                if (dish == null) {
+                    // 缓存空对象，短TTL
+                    stringRedisTemplate.opsForValue().set(cacheKey, NULL_VALUE,
+                            NULL_CACHE_TTL, TimeUnit.SECONDS);
+                    log.info("缓存空对象，菜品ID: {}", id);
+                } else {
+                    stringRedisTemplate.opsForValue().set(cacheKey, jsonString,
+                            getRandomTtl(), TimeUnit.SECONDS);
+                }
+                List<DishFlavor> flavors = dishFlavorMapper.getByDishId(id);
+                DishVO dishVO = new DishVO();
+                BeanUtils.copyProperties(dish, dishVO);
+                dishVO.setFlavors(flavors);
+                return dishVO;
+            }else {
+                log.info("获取锁失败，等待后重试，菜品ID: {}", id);
+                Thread.sleep(50);
+                return getByIdWithFlavor(id);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("获取锁失败", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
-        //根据菜品id查询口味
-        List<DishFlavor> flavors = dishFlavorMapper.getByDishId(id);
-        //将查询到的菜品和口味封装到DishVO中
-        DishVO dishVO = new DishVO();
-        BeanUtils.copyProperties(dish, dishVO);
-        dishVO.setFlavors(flavors);
-        return dishVO;
     }
         /**
          * 更新菜品

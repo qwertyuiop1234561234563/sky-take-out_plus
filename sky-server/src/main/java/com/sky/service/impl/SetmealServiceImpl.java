@@ -23,6 +23,8 @@ import com.sky.vo.DishVO;
 import com.sky.vo.SetmealVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -43,10 +45,12 @@ public class SetmealServiceImpl implements SetmealService {
     private final SetmealDishMapper setmealDishMapper;
     private final DishMapper dishMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final RedissonClient redissonClient;
 
     private static final String SETMEAL_KEY_PREFIX = "setmeal:";
     private static final String NULL_VALUE = "NULL";
     private static final long NULL_CACHE_TTL = 300;
+    private static final String LOCK_KEY_PREFIX = "lock:setmeal:";
 
     @Transactional
     @Override
@@ -95,6 +99,9 @@ public class SetmealServiceImpl implements SetmealService {
     @Override
     public SetmealVO getById(Long id) {
         String cacheKey = SETMEAL_KEY_PREFIX + id;
+        String lockKey = LOCK_KEY_PREFIX + id;
+
+        RLock lock = redissonClient.getLock(lockKey);
 
         String cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
         if (cacheValue != null) {
@@ -104,30 +111,58 @@ public class SetmealServiceImpl implements SetmealService {
             }
 
              Setmeal setmeal = JSON.parseObject(cacheValue, Setmeal.class);
+            List<SetmealDish> setmealDishes = setmealDishMapper.getBySetmealId(id);
              //将Setmeal实体类转换为SetmealVO
              SetmealVO setmealVO = new SetmealVO();
              BeanUtils.copyProperties(setmeal, setmealVO);
+             setmealVO.setSetmealDishes(setmealDishes);
              return setmealVO;
         }
-        Setmeal setmeal = setmealMapper.getById(id);
-        String jsonString = JSON.toJSONString(setmeal);
-        if (setmeal == null) {
-            // 缓存空对象，短TTL
-            stringRedisTemplate.opsForValue().set(cacheKey, NULL_VALUE,
-                    NULL_CACHE_TTL, TimeUnit.SECONDS);
-            log.info("缓存空对象，套餐ID: {}", id);
-        } else {
-            // 缓存真实数据
-            stringRedisTemplate.opsForValue().set(cacheKey, jsonString,
-                    getRandomTtl(), TimeUnit.SECONDS);
+        try {
+            boolean locked = lock.tryLock(100, 3000, TimeUnit.MILLISECONDS);
+            if (locked) {
+                cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
+                if (cacheValue != null) {
+                    Setmeal setmeal = JSON.parseObject(cacheValue, Setmeal.class);
+                    //将Setmeal实体类转换为SetmealVO
+                    List<SetmealDish> setmealDishes = setmealDishMapper.getBySetmealId(id);
+                    SetmealVO setmealVO = new SetmealVO();
+                    BeanUtils.copyProperties(setmeal, setmealVO);
+                    setmealVO.setSetmealDishes(setmealDishes);
+                    return setmealVO;
+                }
+                Setmeal setmeal = setmealMapper.getById(id);
+                String jsonString = JSON.toJSONString(setmeal);
+                if (setmeal == null) {
+                    // 缓存空对象，短TTL
+                    stringRedisTemplate.opsForValue().set(cacheKey, NULL_VALUE,
+                            NULL_CACHE_TTL, TimeUnit.SECONDS);
+                    log.info("缓存空对象，套餐ID: {}", id);
+                } else {
+                    // 缓存真实数据
+                    stringRedisTemplate.opsForValue().set(cacheKey, jsonString,
+                            getRandomTtl(), TimeUnit.SECONDS);
+                }
+                List<SetmealDish> setmealDishes = setmealDishMapper.getBySetmealId(id);
+
+                SetmealVO setmealVO = new SetmealVO();
+                BeanUtils.copyProperties(setmeal, setmealVO);
+                setmealVO.setSetmealDishes(setmealDishes);
+
+                return setmealVO;
+            }else {
+                log.info("获取锁失败，等待后重试，套餐ID: {}", id);
+                Thread.sleep(50);
+                return getById(id);
+            }
+    }catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("获取锁失败", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
-        List<SetmealDish> setmealDishes = setmealDishMapper.getBySetmealId(id);
-
-        SetmealVO setmealVO = new SetmealVO();
-        BeanUtils.copyProperties(setmeal, setmealVO);
-        setmealVO.setSetmealDishes(setmealDishes);
-
-        return setmealVO;
     }
     @Transactional
     @Override

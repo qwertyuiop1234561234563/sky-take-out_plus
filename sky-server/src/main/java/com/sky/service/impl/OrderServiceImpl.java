@@ -26,6 +26,7 @@ import com.sky.vo.OrderVO;
 import com.sky.websocket.WebSocketServer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -66,6 +67,7 @@ public class OrderServiceImpl implements OrderService {
 
     private final AsyncService asyncService;
 
+    private final OrderLockService orderLockService;
     /**
      * 用户下单
      * @param ordersSubmitDTO
@@ -85,6 +87,9 @@ public class OrderServiceImpl implements OrderService {
         checkOutOfRange(addressBook.getCityName(),addressBook.getDistrictName(),addressBook.getDetail());
         //校验购物车是否存在
         Long userId = BaseContext.getCurrentId();
+        if (!orderLockService.tryLockForOrder(userId, 3, 10)) {
+            throw new OrderBusinessException("您的订单正在处理中，请勿重复提交");
+        }
         ShoppingCart shoppingCart = new ShoppingCart();
         shoppingCart.setUserId(userId);
         List<ShoppingCart> shoppingCartList = shoppingCartMapper.list(shoppingCart);
@@ -123,6 +128,7 @@ public class OrderServiceImpl implements OrderService {
                 .orderAmount(orders.getAmount())
                 .orderTime(orders.getOrderTime())
                 .build();
+        orderLockService.unlockForOrder(userId);
         return orderSubmitVO;
     }
 

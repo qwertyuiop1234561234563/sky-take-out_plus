@@ -1,4 +1,3 @@
-// AsyncConfig.java - 优化版本
 package com.sky.config;
 
 import org.springframework.context.annotation.Bean;
@@ -30,19 +29,6 @@ public class AsyncConfig {
         // 等待所有任务结束后再关闭线程池
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
-        executor.initialize();
-        return executor;
-    }
-
-    // 专门用于日志记录的线程池
-    @Bean("logTaskExecutor")
-    public TaskExecutor logTaskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(5);
-        executor.setQueueCapacity(1000); // 日志队列可以大一些
-        executor.setThreadNamePrefix("SkyTakeout-Log-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy()); // 日志丢弃不影响主流程
         executor.initialize();
         return executor;
     }

@@ -5,11 +5,13 @@ import com.sky.dto.ShoppingCartDTO;
 import com.sky.entity.Dish;
 import com.sky.entity.Setmeal;
 import com.sky.entity.ShoppingCart;
+import com.sky.exception.ShoppingCartBusinessException;
 import com.sky.mapper.DishMapper;
 import com.sky.mapper.SetmealMapper;
 import com.sky.mapper.ShoppingCartMapper;
 import com.sky.service.ShoppingCartService;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,15 +22,14 @@ import java.util.List;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class ShoppingCartServiceImpl implements ShoppingCartService {
 
-    @Autowired
-    private ShoppingCartMapper shoppingCartMapper;
-    @Autowired
-    private SetmealMapper setmealMapper;
-     @Autowired
-     private DishMapper dishMapper;
 
+    private final ShoppingCartMapper shoppingCartMapper;
+    private final SetmealMapper setmealMapper;
+     private final DishMapper dishMapper;
+    private final OrderLockService orderLockService;
     /**
      * 添加购物车
      * @param shoppingCartDTO
@@ -36,9 +37,14 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
     @Override
     public void addShoppingCart(ShoppingCartDTO shoppingCartDTO) {
         //判断当前加入到购物车中的商品是否已经存在于购物车中
+        Long userId = BaseContext.getCurrentId();
+        // 获取购物车操作锁
+        if (!orderLockService.tryLockForCart(userId, 2, 5)) {
+            throw new ShoppingCartBusinessException("购物车正在操作中，请稍后重试");
+        }
         ShoppingCart shoppingCart = new ShoppingCart();
         BeanUtils.copyProperties(shoppingCartDTO, shoppingCart);
-        Long userId = BaseContext.getCurrentId();
+
         shoppingCart.setUserId(userId);
         List<ShoppingCart> list = shoppingCartMapper.list(shoppingCart);
 
@@ -69,6 +75,7 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
             shoppingCart.setNumber(1);
             shoppingCart.setCreateTime(LocalDateTime.now());
             shoppingCartMapper.insert(shoppingCart);
+            orderLockService.unlockForCart(userId);
         }
     }
     /**
@@ -88,8 +95,16 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
     @Override
     public void cleanShoppingCart() {
         Long userId = BaseContext.getCurrentId();
+        if (!orderLockService.tryLockForCart(userId, 2, 5)) {
+            throw new ShoppingCartBusinessException("购物车正在操作中，请稍后重试");
+        }
         ShoppingCart shoppingCart = new ShoppingCart();
         shoppingCart.setUserId(userId);
-        shoppingCartMapper.delete(userId);
+        try {
+            shoppingCartMapper.delete(userId);
+        } finally {
+            orderLockService.unlockForCart(userId);
+        }
+
     }
 }

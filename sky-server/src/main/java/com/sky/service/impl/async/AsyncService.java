@@ -1,5 +1,5 @@
 // AsyncService.java - 核心异步服务
-package com.sky.service;
+package com.sky.service.impl.async;
 
 import com.sky.entity.Orders;
 import com.sky.mapper.*;
